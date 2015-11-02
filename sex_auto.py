@@ -1,11 +1,28 @@
 import subprocess as sp
 import os
 import glob
+import shutil
 
 # Set current working directory to /Users/jaredhand/Documents/photometry/data_in/
 os.chdir('/Users/jaredhand/Documents/photometry/data_in/')
 # str for sextractor script
 script = 'sex -CATALOG_NAME %s %s'
+
+
+def rm_spaces(list1):
+    """
+    Removes all whitespace from members of a list (assuming list contains only str objects).
+
+    :param list1: input list where are whitespace is replaced with '_'
+    :return: modified list1
+    """
+    for i in range(len(list1)):
+        if ' ' in list1[i]:
+            j = list1[i].replace(' ', '_')
+            os.rename(list1[i], j)
+            list1.pop(i)
+            list1.insert(i, j)
+    return list1
 
 
 def get_files():
@@ -22,26 +39,10 @@ def get_files():
 
     fits = glob.glob('*.fit*')
     FITS = glob.glob('*.FIT*')
-    return fits + FITS
+    no_space = rm_spaces(list1=fits+FITS)
+    return no_space
 
 files = get_files()
-
-
-def rm_spaces(list1):
-    """
-    Removes all whitespace from members of a list (assuming list contains only str objects).
-
-    :param list1: input list where are whitespace is replaced with '_'
-    :return: modified list1
-    """
-    for i in list1:
-        if ' ' in i:
-            j = i.replace(' ', '_')
-            os.rename(i, j)
-            i = j
-    return list1
-
-files_nospaces = rm_spaces(list1=files)
 
 
 def sex_call(list1):
@@ -68,8 +69,32 @@ def sex_call(list1):
     return True
 
 print(os.getcwd())
-sex_call(list1=files_nospaces)
+sex_call(list1=files)
+for i in glob.glob('*.cat'):
+    shutil.move('/Users/jaredhand/Documents/photometry/data_in/'+i, '/Users/jaredhand/Documents/photometry/catalogs/'+i)
 
+
+"""
+def get_files():
+
+    fits = []
+    FITS = []
+    try:
+        for file in Path('/Users/jaredhand/Documents/photometry/data_in/').glob('/**/*.FIT*'):
+            if 'FIT.gz' in file:
+                sp.check_call('gunzip ' + file, shell=True)
+            FITS.append(file)
+
+        for file in Path('/Users/jaredhand/Documents/photometry/data_in/').glob('/**/*.fit*'):
+            if 'fit.gz' in file:
+                sp.check_call('gunzip ' + file, shell=True)
+            fits.append(file)
+
+    except sp.CalledProcessError:
+        raise
+
+    return fits + FITS
+"""
 
 
 

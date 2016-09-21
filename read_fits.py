@@ -31,6 +31,19 @@ def decode_fitshead(file1, cwd=None):
     return header_list
 
 
+def get_info(info, list1):
+    # retrieves DATE-OBS from fits header
+    for k in list1:
+        if info in k:
+            first = k.split('=', 1)[1]
+            second = first.split('/', 1)[0]
+            third = second.replace('\'', '')
+            header_info = third.strip()
+            return header_info
+    return False
+
+
+
 def get_dateobs(list1):
     # retrieves DATE-OBS from fits header
     for k in list1:

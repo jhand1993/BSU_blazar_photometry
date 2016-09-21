@@ -35,6 +35,9 @@ class TargetData:
         :type name_list: list used for dictionary key
         :type val_list: list used for dictionary value for each key
         """
+        # lower all strings in name_list for consistency with comparisons in photometry.net
+        for i in range(len(name_list)):
+            name_list[i] = name_list[i].lower()
         result = dict(zip(name_list, val_list))
         return result
 
@@ -61,3 +64,17 @@ class TargetData:
                 pass
         coord = dict1.get(i)
         return coord
+
+    """
+    # All values from target_data are Byte data type.
+    target_name = target_data[:, 0].tolist()
+    target_RA = target_data[:, 1].tolist()
+    target_dec = target_data[:, 2].tolist()
+    # Converts Byte data in each list to string data type.
+    target_name = bytes_to_str(target_name)
+    target_RA = bytes_to_str(target_RA)
+    target_dec = bytes_to_str(target_dec)
+    # create dictionaries of RA and dec for each respective target
+    RA_dict = target_dict(target_name, target_RA)
+    dec_dict = target_dict(target_name, target_dec)
+    """

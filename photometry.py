@@ -6,6 +6,10 @@ import config
 import os
 import read_fits
 # import aplpy
+racol = 33
+deccol = 34
+fluxcol = 4
+fluxerrcol = 5
 
 
 def haversine(ra1, dec1, ra2, dec2, radius=1, deg=True):
@@ -53,16 +57,55 @@ def find_source(cat):
     cat_len = len(cat_data[2].data)
     closest = 1e10
     for k in range(cat_len):
-        cat_ra = np.copy(cat_data[2].data[k][20])
-        cat_dec = np.copy(cat_data[2].data[k][21])
+        cat_ra = np.copy(cat_data[2].data[k][racol])
+        cat_dec = np.copy(cat_data[2].data[k][deccol])
         delta = haversine(source_ra, source_dec, cat_ra, cat_dec)
         if delta < closest:
             closest = delta
             closest_source = k + 1
     # grabbing FLUX-AUTO and FLUXERR-AUTO from catalog file
-    source_flux = float(np.copy(cat_data[2].data[closest_source - 1][4]))
-    source_fluxerr = float(np.copy(cat_data[2].data[closest_source - 1][5]))
+    source_flux = float(np.copy(cat_data[2].data[closest_source - 1][fluxcol]))
+    source_fluxerr = float(np.copy(cat_data[2].data[closest_source - 1][fluxerrcol]))
     return [closest_source, source_flux, source_fluxerr]
+
+
+def find_obj(chosen, cats):
+    """
+    searches through cats to find closest source to each source given in chosen.  Returns flags for duplicate finds
+    or nonexistent sources.
+    """
+    bigarr = np.zeros((len(cats), len(chosen), 4), dtype=float)
+    # bigarr[0, :, :] = np.copy(chosen)
+    dup = np.empty((len(cats), len(chosen)), dtype=bool)
+    exists = np.empty((len(cats), len(chosen)), dtype=bool)
+    for cat in range(len(cats)):
+        # print(cats[cat])
+        for ref in range(len(chosen)):
+            closest = 2 / 60  # if no target is within two arcminutes, no source found
+            closest_source = -1
+            ref_ra = np.copy(chosen[ref][2])
+            ref_dec = np.copy(chosen[ref][3])
+            for source in range(len(cats[cat])):
+                cat_ra = np.copy(cats[cat][source][2])
+                cat_dec = np.copy(cats[cat][source][3])
+                delta = haversine(ref_ra, ref_dec, cat_ra, cat_dec)
+                if delta < closest:
+                    closest = delta
+                    closest_source = source
+                # check to see if source in cat is already in bigarr
+            if cats[cat][closest_source] in bigarr[cat, :ref, :]:
+                # print(cats[cat][closest_source], bigarr[cat, :ref, 0])
+                dup[cat, ref] = False
+            else:
+                dup[cat, ref] = True
+            # mark exists as false if no closest source is found for a catalog
+            if closest_source == -1:
+                exists[cat, ref] = False
+                bigarr[cat, ref, :] = np.array([-1., -1., -1., -1.])
+            else:
+                exists[cat, ref] = True
+                bigarr[cat, ref, :] = np.copy(cats[cat][closest_source])
+    return bigarr, dup, exists
 
 # instantiate TargetData class to find RA and Dec for obj
 td = target_data.TargetData()
@@ -108,19 +151,19 @@ mega = []
 for i in catalogs:
     header = read_fits.decode_fitshead(i)
     cat_data = fits.open(i)
-    fluxlist = [s[2] for s in cat_data[2].data]
+    fluxlist = [s[fluxcol] for s in cat_data[2].data]
     sid = np.asarray([s[0] for s in cat_data[2].data])
     sflux = np.asarray(fluxlist / np.sum(fluxlist))
-    sra = np.asarray([s[33] for s in cat_data[2].data])
-    sdec = np.asarray([s[34] for s in cat_data[2].data])
+    sra = np.asarray([s[racol] for s in cat_data[2].data])
+    sdec = np.asarray([s[deccol] for s in cat_data[2].data])
     # first find and remove object of interest from arrays
     source_ra = float(td.coord_lookup(i, RA_dict)) * 15.0
     source_dec = float(td.coord_lookup(i, dec_dict))
     cat_len = len(cat_data[2].data)
     closest = 1e10
     for k in range(cat_len):
-        cat_ra = np.copy(cat_data[2].data[k][33])
-        cat_dec = np.copy(cat_data[2].data[k][34])
+        cat_ra = np.copy(cat_data[2].data[k][racol])
+        cat_dec = np.copy(cat_data[2].data[k][deccol])
         delta = haversine(source_ra, source_dec, cat_ra, cat_dec)
         if delta < closest:
             # print(source_ra, cat_ra, source_dec, cat_dec)
@@ -135,7 +178,6 @@ for i in catalogs:
     srow = np.stack((sid, sflux, sra, sdec), axis=1)
     # create mask of sources within radius r specified in config.py
     havs = [haversine(s[2], s[3], obj_ra, obj_dec) for s in srow]
-    print(havs)
     print(np.mean(havs), min(havs), max(havs))
     sgood = np.asarray([abs(haversine(s[2], s[3], obj_ra, obj_dec)) < config.r for s in srow])
     # print(len(srow))
@@ -151,7 +193,7 @@ for i in range(len(mega)):
     cat = cat[catmask]
     # mega[i] = cat[catmask]
     mega[i] = cat
-    print(np.mean(cat[:, 1]), len(cat[:, 1]))
+    # print(np.mean(cat[:, 1]), len(cat[:, 1]))
 # find catalog with fewest sources
 catcount = len(mega)
 shortestcatval = 1e10
@@ -165,58 +207,17 @@ shortlen = len(shortestcat)
 # contract all other catalogs to size of shortest catalog:
 for i in range(catcount):
     mega[i] = np.copy(mega[i][:shortlen])
-    print(len(mega[i]))
 megaarr = np.asarray(mega)
-print(np.shape(megaarr))
-print(megaarr)
-
-
-
-
-"""
-sort = np.argsort(shortestcat[:, 2])
-megalong = mega.remove(shortestcat)
-tol = 5e-3
-newmega = []
-for cat in mega:
-    # newcat = []
-    catmask = np.empty(len(cat), dtype=bool)
-    print(catmask)
-    print(len(cat))
-    for i in shortestcat:
-        # print(i)
-        for j in range(len(cat)):
-            deltara = 1e10
-            deltadec = 1e10
-            diffra = abs(i[2] - cat[j][2])
-            diffdec = abs(i[3] - cat[j][3])
-            if i[2] + tol > cat[j][2] > i[2] - tol and i[3] + tol > cat[j][3] > i[3] - tol:
-                if deltara > diffra and deltadec > diffdec:
-                    deltara = diffra
-                    deltadec = diffdec
-                    catmask[j] = True
-                    # print('success')
-                elif catmask[j]:
-                    pass
-                else:
-                    catmask[j] = False
-            elif catmask[j]:
-                pass
-            else:
-                catmask[j] = False
-    newcat = cat[catmask]
-    print(len(newcat))
-    print(catmask)
-    newmega.append(newcat)
-# sort newmega with respect to right ascension and declination (RA first)
-# for i in range(len(newmega)):
-    # print(newmega[i])
-    # print(np.lexsort(newmega[i][:, 2]))
-    # sorted = np.lexsort((newmega[i][:, 2], newmega[i][:, 3]))
-    # cat = newmega[i][sorted]
-    # newmega[i] = cat
-    # print(len(i))
-
-# for cat in newmega:
-#     print(len(cat))
-"""
+# print(np.shape(megaarr))
+# sort megaarr and yield flag matrices
+megasort, dup, missing = find_obj(shortestcat, megaarr)
+print(shortlen)
+for i in range(shortlen):
+    objids = megasort[:, i, 0]
+    objfluxes = megasort[:, i, 1]
+    truthmask = np.logical_or(dup[:, i], missing[:, i])
+    objids = objids[truthmask]
+    # print(objids)
+    objfluxes = objfluxes[truthmask]
+    objfluxstd = np.std(objfluxes)
+    print(objfluxstd)

@@ -6,6 +6,8 @@ import config
 import os
 import read_fits
 # import aplpy
+# SExtractor catalog column numbers.  Note that columns in fits file are base 1 while in python they are given as
+# base 0.
 racol = 33
 deccol = 34
 fluxcol = 4
@@ -92,7 +94,7 @@ def find_obj(chosen, cats):
                 if delta < closest:
                     closest = delta
                     closest_source = source
-                # check to see if source in cat is already in bigarr
+            # check to see if source in cat is already in bigarr
             if cats[cat][closest_source] in bigarr[cat, :ref, :]:
                 # print(cats[cat][closest_source], bigarr[cat, :ref, 0])
                 dup[cat, ref] = False
@@ -211,13 +213,25 @@ megaarr = np.asarray(mega)
 # print(np.shape(megaarr))
 # sort megaarr and yield flag matrices
 megasort, dup, missing = find_obj(shortestcat, megaarr)
+# print(megasort)
 print(shortlen)
+stdcut = 1e-4
+refsources = []
 for i in range(shortlen):
     objids = megasort[:, i, 0]
     objfluxes = megasort[:, i, 1]
-    truthmask = np.logical_or(dup[:, i], missing[:, i])
+    # print(objfluxes)
+    truthmask = np.logical_and(dup[:, i], missing[:, i])
+    # print(truthmask)
     objids = objids[truthmask]
     # print(objids)
     objfluxes = objfluxes[truthmask]
+    # print(objfluxes)
     objfluxstd = np.std(objfluxes)
+    # newline = np.copy(megasort[:, i, :])
+    if objfluxstd <= stdcut:
+        # newline = np.append(newline, objfluxstd)
+        # print(newline)
+        refsources.append(objfluxstd)
     print(objfluxstd)
+print(len(refsources))
